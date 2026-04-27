@@ -152,7 +152,8 @@ class Kinematics:
                     tf
                 )  # produce solutions in shape (B, num_retries/initial_configs, active_ancestor_dof)
                 # TODO return mask for invalid solutions. CPU returns None at the moment
-                return result.solutions[:, 0, :]
+                # Filter to only controlled joints
+                return result.solutions[:, 0, :][:, self.controlled_joints_idx_in_qmask]
             else:
                 jacobian = self.pk_chain.jacobian(q0)
                 # code commented out below is the fast kinematics method
@@ -169,7 +170,9 @@ class Kinematics:
 
                 # NOTE (stao): this method of IK is from https://mathweb.ucsd.edu/~sbuss/ResearchWeb/ikmethods/iksurvey.pdf by Samuel R. Buss
                 delta_joint_pos = torch.linalg.pinv(jacobian) @ action.unsqueeze(-1)
-                return q0 + delta_joint_pos.squeeze(-1)
+                # Filter to only controlled joints
+                full_result = q0 + delta_joint_pos.squeeze(-1)
+                return full_result[:, self.controlled_joints_idx_in_qmask]
         else:
             result, success, error = self.pmodel.compute_inverse_kinematics(
                 self.end_link_idx,
@@ -179,8 +182,10 @@ class Kinematics:
                 max_iterations=100,
             )
             if success:
-                return common.to_tensor(
-                    [result[self.active_ancestor_joint_idxs]], device=self.device
-                )
+                # Get IK result for all ancestor joints
+                full_result = result[self.active_ancestor_joint_idxs]
+                # Filter to only the controlled joints (by indices in ancestor list)
+                controlled_result = full_result[self.controlled_joints_idx_in_qmask]
+                return common.to_tensor([controlled_result], device=self.device)
             else:
                 return None
