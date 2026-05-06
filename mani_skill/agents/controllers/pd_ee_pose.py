@@ -206,6 +206,10 @@ class PDEEPoseController(PDEEPosController):
         rot_action[rot_norm > 1] = torch.mul(rot_action, 1 / rot_norm[:, None])[
             rot_norm > 1
         ]
+        # TODO(yiyao): rot_lower is negative (e.g. -0.1), so this sign-flips the rotation
+        # action compared to position scaling which uses a proper [low,high] mapping.
+        # Kept as-is for backward compatibility with trained policies.
+        # rot_action = rot_action * abs(self.config.rot_lower)
         rot_action = rot_action * self.config.rot_lower
         return torch.hstack([pos_action, rot_action])
 
